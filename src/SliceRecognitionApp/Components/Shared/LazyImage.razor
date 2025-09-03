@@ -1,0 +1,59 @@
+@inject IJSRuntime JS
+
+<HeadContent>
+    <script>
+        window.registerLazyImage = (imgElement, fullResSrc) => {
+            imgElement.dataset.fullSrc = fullResSrc;
+
+            const lazyImageObserver = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const imgElement = entry.target;
+
+                        imgElement.addEventListener('load', () => {
+                            imgElement.classList.remove('blurred');
+                        }, { once: true });
+
+                        imgElement.src = imgElement.dataset.fullSrc;
+
+                        observer.unobserve(imgElement);
+                    }
+                });
+            }, {
+                rootMargin: '50px'
+            });
+
+            lazyImageObserver.observe(imgElement);
+        };
+
+    </script>
+</HeadContent>
+
+<div style="overflow: hidden; height: 100%; width: 100%;">
+    @if (!string.IsNullOrEmpty(LowRes))
+    {
+        <img @ref="imgRef" class="blur-up blurred" src="@LowRes" style="object-fit: cover; width: 100%; height: 100%;" />
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string? LowRes { get; set; }
+    [Parameter, EditorRequired] public string? FullRes { get; set; }
+
+
+    private ElementReference imgRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("registerLazyImage", imgRef, FullRes);
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+    }
+}

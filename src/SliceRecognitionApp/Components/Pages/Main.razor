@@ -1,0 +1,240 @@
+﻿@page "/"
+@rendermode InteractiveServer
+
+@using Microsoft.AspNetCore.Components.Forms
+@using SliceRecognitionApp.Components.Services
+@inject SampleImageService SampleImageService
+@inject SliceRecognizeProcessService ProcessorService
+@inject IWebHostEnvironment WebHostEnvironment
+@inject RateLimiterService RateLimiter
+@inject IHttpContextAccessor HttpContextAccessor
+
+<PageTitle>Array Tomography | Marek Konečný</PageTitle>
+
+<div class="container-fluid flex-grow-1">
+    <div class="row align-items-center justify-content-center">
+
+        <div class="col-md-5 d-flex flex-column gap-3 align-self-stretch justify-content-between">
+            <div class="rounded border @(uploadedImageBytes is null ? "border-light" : "border-primary")">
+                <InputFile OnChange="HandleFileSelected" class="form-control border-priamry" accept=".png,.jpg,.jpeg" />
+                @if (!string.IsNullOrEmpty(fileUploadError))
+                {
+                    <div class="alert alert-danger mt-2 p-2" role="alert">
+                        @fileUploadError
+                    </div>
+                }
+            </div>
+
+            <div class="d-flex flex-row align-items-center gap-2">
+                <hr class="flex-grow-1" />
+                <span class="text-muted"> NEBO ZVOL JEDEN Z UKÁZKOVÝCH SNÍMKŮ </span>
+                <hr class="flex-grow-1" />
+            </div>
+
+            <div class="d-flex justify-content-center" style="height: 55vh; overflow-y: scroll">
+                <div class="d-flex flex-wrap flex-grow-1">
+                    @foreach(var img in SampleImageService.GetSampleImages())
+                    {
+                        var isChecked = selectedImageUrl == img.FullResUrl;
+                        <input type="radio" class="btn-check" name="options" id="@img.FullResUrl" autocomplete="off" @onchange="() => OnImageSelected(img.FullResUrl)" checked="@isChecked">
+                        <label class="btn btn-outline-primary p-1 border-0 col-6 col-md-4 " for="@img.FullResUrl">
+                                <LazyImage LowRes="@img.LowResUrl" FullRes="@img.FullResUrl" @key="img.FullResUrl" />
+                        </label>
+                    }
+                </div>
+            </div>
+            
+            <div class="d-grid gap-2">
+                <button class="btn btn-primary btn-lg" @onclick="ProcessSelectedImage" disabled="@(isProcessing || btnDisable)">
+                    <span>Spusť algoritmus</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="col-md-6 d-flex justify-content-center align-items-center mt-5 mt-md-0 bg-light rounded" style="height: 85vh;">
+            @if (isProcessing)
+            {
+                if (!string.IsNullOrEmpty(processedImageBase64))
+                {
+                    <div class="position-relative h-100 w-100 d-flex justify-content-center align-items-center">
+                        <img src="@($"data:image/png;base64,{processedImageBase64}")" class="opacity-75 shadow" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                        <div class="position-absolute top-50 start-50 translate-middle">
+                            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                                <span class="visually-hidden">Zpracovávám</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else 
+                {
+                    <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                        <span class="visually-hidden">Zpracovávám</span>
+                    </div>
+                }
+            }
+            else if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger" role="alert">
+                    <h4>Chyba</h4>
+                    <pre class="text-wrap">@errorMessage</pre>
+                </div>
+            }
+            else if (!string.IsNullOrEmpty(processedImageBase64))
+            {
+                <img src="@($"data:image/png;base64,{processedImageBase64}")" style="max-width: 100%; max-height: 100%; object-fit: contain;" class="shadow" />
+            }
+            else
+            {
+                <span class="text-muted">
+                    Vyber nebo nahraj obrázek a stiskni tlačítko.
+                </span>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+     @using System.Diagnostics 
+
+    private string? selectedImageUrl;
+    private bool isProcessing = false;
+    private bool btnDisable = false;
+    private string? errorMessage;
+    private string? processedImageBase64;
+    
+    // New fields for file upload
+    private byte[]? uploadedImageBytes;
+    private string? fileUploadError;
+    private const long maxFileSize = 750 * 1024; // 750 kB
+
+    protected override void OnInitialized()
+    {
+        // Pre-select the first sample image
+        selectedImageUrl = SampleImageService.GetSampleImages().FirstOrDefault()?.FullResUrl;
+    }
+
+    private void OnImageSelected(string imageUrl)
+    {
+        selectedImageUrl = imageUrl;
+        
+        // Clear uploaded file state when a sample is selected
+        uploadedImageBytes = null;
+        fileUploadError = null;
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        // Reset state
+        uploadedImageBytes = null;
+        fileUploadError = null;
+        errorMessage = null;
+
+        if (file is null) return;
+    
+        if (file.Size > maxFileSize)
+        {
+            fileUploadError = $"Soubor je příliš velký. Maximální velikost je {maxFileSize / 1024} kB.";
+            return;
+        }
+
+        var allowedTypes = new[] { "image/jpeg", "image/png" };
+        if (!allowedTypes.Contains(file.ContentType))
+        {
+            fileUploadError = "Nesprávný formát souboru. Nahraj PNG nebo JPG.";
+            return;
+        }
+    
+        try
+        {
+            await using var memoryStream = new MemoryStream();
+            await file.OpenReadStream(maxFileSize).CopyToAsync(memoryStream);
+            uploadedImageBytes = memoryStream.ToArray();
+        
+            selectedImageUrl = null;
+            processedImageBase64 = null;
+        }
+        catch (Exception ex)
+        {
+            fileUploadError = $"Chyba při čtení souboru: {ex.Message}";
+        }
+    }
+
+    private async Task ProcessSelectedImage()
+    {
+        var remoteIp = HttpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+        if (string.IsNullOrEmpty(remoteIp))
+        {
+            errorMessage = "Nelze ověřit požadavek.";
+            return;
+        }
+        if (!RateLimiter.IsRequestAllowed(remoteIp))
+        {
+            errorMessage = "Byl dosažen limit požadavků. Snímek lze zpracovat jednou za 2 sekundy.";
+            return;
+        }
+
+        // Check if any image source was provided
+        if (uploadedImageBytes is null && string.IsNullOrEmpty(selectedImageUrl))
+        {
+            errorMessage = "Nahraj snímek nebo zvol jeden z ukázkových snímků.";
+            return;
+        }
+    
+        isProcessing = true;
+        btnDisable = true;
+        errorMessage = null;
+
+          // 1. Start a timer to measure how long processing takes.
+        var stopwatch = Stopwatch.StartNew();
+
+        try
+        {
+            byte[] imageBytesToProcess;
+
+            if (uploadedImageBytes is not null)
+            {
+                imageBytesToProcess = uploadedImageBytes;
+            }
+            else
+            {
+                var imagePath = Path.Combine(WebHostEnvironment.WebRootPath, selectedImageUrl!);
+                if (!File.Exists(imagePath))
+                {
+                    throw new FileNotFoundException("Zvolený ukázkový snímek nebyl nalezen.", imagePath);
+                }
+                imageBytesToProcess = await File.ReadAllBytesAsync(imagePath);
+            }
+
+            var defaultParams = new SliceRecognizeProcessParams();
+            processedImageBase64 = await ProcessorService.ProcessImageAsync(imageBytesToProcess, defaultParams);
+            isProcessing = false;
+
+            //rerender
+            StateHasChanged();
+
+            stopwatch.Stop();
+            var processingTimeMs = stopwatch.ElapsedMilliseconds;
+            var minDisableTimeMs = 2000;
+            // if processing was faster than 2 seconds, wait for the remaining time before enabling btn
+            if (processingTimeMs < minDisableTimeMs)
+            {
+                await Task.Delay((int)(minDisableTimeMs - processingTimeMs));
+            }
+            btnDisable = false;
+        }
+        catch (SliceRecognizeProcessException procEx)
+        {
+            errorMessage = $"Chyba při zpracování snímku: {procEx.Message}\nOutput:\n{procEx.ProcessErrorOutput}";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Nastala neočekávaná chyba: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+            btnDisable = false;
+        }
+    }
+}

@@ -1,0 +1,77 @@
+# General Build Artifacts
+# These folders are generated during the build process.
+[Bb]in/
+[Oo]bj/
+**/publish/
+**/wwwroot/dist/
+
+# IDE and Editor-specific files
+# -----------------------------
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Rider / JetBrains
+.idea/
+*.DotSettings.user
+
+# Visual Studio Code
+# Ignore everything in the .vscode folder except for files that
+# are typically shared with the team.
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Configuration and Secrets
+# -------------------------
+
+# User-specific secrets and environment settings.
+# It's a best practice to keep local development settings out of source control.
+# Your production settings should be managed via environment variables or a secrets vault.
+appsettings.Development.json
+secrets.json
+user-secrets/
+
+# NuGet Packages
+# ----------------
+
+# Packages are restored from nuget.org and should not be checked in.
+*.nupkg
+*.snupkg
+**/[Pp]ackages/
+
+# Test Results
+# ------------
+TestResults/
+*.trx
+
+# OS-generated files
+# ------------------
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# macOS
+.DS_Store
+._*
+
+# Log files
+# ---------
+*.log
+*.tlog
+
+# Other compiled files that shouldn't be checked in
+# (These are usually in bin/ or obj/ but this is an extra safeguard)
+*.dll
+*.exe
+*.pdb
+*.lib
+*.so
+*.dylib
