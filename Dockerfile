@@ -1,6 +1,6 @@
 # Stage 1: Build the 'slice_localize' binary
 # Use Debian 12 as the base to match the final .NET runtime image, ensuring library compatibility.
-FROM debian:12-slim as binary-builder
+FROM debian:12-slim AS binary-builder
 
 # Install build dependencies: git, C++ compiler, make, and OpenCV development headers for Debian.
 RUN apt-get update && apt-get install -y \
@@ -24,7 +24,7 @@ RUN make
 
 
 # Stage 2: Build the Blazor .NET application (This stage is self-contained and needs no changes)
-FROM mcr.microsoft.com/dotnet/sdk:8.0 as dotnet-builder
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS dotnet-builder
 
 WORKDIR /src
 

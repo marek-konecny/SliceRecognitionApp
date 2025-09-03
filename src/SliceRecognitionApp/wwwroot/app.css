@@ -67,3 +67,11 @@ img::selection {
     background: transparent;
     color: initial;
 }
+
+#logo-link > #logo {
+    transition: transform 0.1s ease;
+}
+#logo-link:hover > #logo {
+    transform: scale(0.9);
+    filter: brightness(1.05);
+}
